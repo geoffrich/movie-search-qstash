@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import type { SearchResponse } from '$lib/types/tmdb';
-import redis, { MOVIE_IDS_KEY } from '$lib/redis';
+import { cacheMovieIds } from '$lib/redis';
 import { TMDB_API_KEY } from '$env/static/private';
 
 const VOTE_THRESHOLD = 20;
@@ -21,13 +21,7 @@ export const load: PageServerLoad = async function ({ url, setHeaders }) {
 		removedMovies.map((m) => m.title)
 	);
 
-	if (filteredMovies.length > 0) {
-		try {
-			await redis.sadd(MOVIE_IDS_KEY, ...filteredMovies.map((r) => r.id));
-		} catch (e) {
-			console.log(e);
-		}
-	}
+	await cacheMovieIds(filteredMovies.map((m) => m.id));
 
 	setHeaders({
 		'cache-control': 'max-age=300'

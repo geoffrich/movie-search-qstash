@@ -1,4 +1,4 @@
-# movie-search-redis
+# movie-search-qstash
 
 Demo for a blog post about SvelteKit + Redis + QStash using [Upstash](https://www.upstash.com/).
 

@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type * as TMDB from '$lib/types/tmdb';
-import type { Movie, MovieDetails } from '$lib/types';
-import redis, { getMovieKey } from '$lib/redis';
+import type { Movie } from '$lib/types';
+import { getMovieDetailsFromCache, cacheMovieResponse } from '$lib/redis';
 import { TMDB_API_KEY } from '$env/static/private';
 
 export const load: PageServerLoad = async function ({ params }) {
@@ -22,20 +22,6 @@ export const load: PageServerLoad = async function ({ params }) {
 	};
 };
 
-async function getMovieDetailsFromCache(id: number): Promise<MovieDetails | Record<string, never>> {
-	try {
-		const cached = await redis.get(getMovieKey(id));
-		if (cached) {
-			const parsed: MovieDetails = JSON.parse(cached);
-			console.log(`Found ${id} in cache`);
-			return parsed;
-		}
-	} catch (e) {
-		console.log('Unable to retrieve from cache', id, e);
-	}
-	return {};
-}
-
 async function getMovieDetailsFromApi(id: number) {
 	const [movieResponse, creditsResponse] = await Promise.all([getMovieDetails(id), getCredits(id)]);
 	if (movieResponse.ok) {
@@ -50,23 +36,6 @@ async function getMovieDetailsFromApi(id: number) {
 
 	console.log('Bad status from API', movieResponse.status);
 	throw error(500, 'unable to retrieve movie details from API');
-}
-
-async function cacheMovieResponse(
-	id: number,
-	movie: TMDB.Movie,
-	credits: TMDB.MovieCreditsResponse
-) {
-	try {
-		const cache: MovieDetails = {
-			movie,
-			credits
-		};
-		// store movie response for 24 hours
-		await redis.set(getMovieKey(id), JSON.stringify(cache), 'EX', 24 * 60 * 60);
-	} catch (e) {
-		console.log('Unable to cache', id, e);
-	}
 }
 
 async function getMovieDetails(id: number) {
