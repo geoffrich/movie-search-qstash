@@ -6,11 +6,26 @@ import type { MovieDetails } from '$lib/types';
 const MOVIE_IDS_KEY = 'movie_ids';
 
 /** Return the key used to store movie details for a given ID in Redis */
-function getMovieKey(id: number): string {
+function getMovieKey(id: number) {
 	return `movie:${id}`;
 }
 
+function getExpiryKey(id: number) {
+	return getMovieKey(id) + ':fresh';
+}
+
 const redis = REDIS_CONNECTION ? new Redis(REDIS_CONNECTION) : new Redis();
+
+async function hasMovieCacheExpired(id: number) {
+	const key = getExpiryKey(id);
+	try {
+		const result = await redis.get(key);
+		return result === null;
+	} catch (e) {
+		console.log('Unable to retrieve', key, e);
+	}
+	return false;
+}
 
 export async function getMovieDetailsFromCache(
 	id: number
@@ -18,8 +33,9 @@ export async function getMovieDetailsFromCache(
 	try {
 		const cached = await redis.get(getMovieKey(id));
 		if (cached) {
+			const hasExpired = await hasMovieCacheExpired(id);
 			const parsed: MovieDetails = JSON.parse(cached);
-			console.log(`Found ${id} in cache`);
+			console.log(`Found ${id} in cache`, hasExpired);
 			return parsed;
 		}
 	} catch (e) {
@@ -39,8 +55,17 @@ export async function cacheMovieResponse(
 			movie,
 			credits
 		};
-		// store movie response for 24 hours
-		await redis.set(getMovieKey(id), JSON.stringify(cache), 'EX', 24 * 60 * 60);
+		const movieKey = getMovieKey(id);
+		const expiryKey = getExpiryKey(id);
+		const pipeline = redis
+			.multi()
+			// store movie response
+			.set(movieKey, JSON.stringify(cache))
+			// this will track whether the data needs to be refreshed
+			// TODO: update to 24 * 60 * 60
+			.set(expiryKey, 'true', 'EX', 20);
+
+		await pipeline.exec();
 	} catch (e) {
 		console.log('Unable to cache', id, e);
 	}
