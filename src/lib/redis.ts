@@ -1,7 +1,13 @@
 import Redis from 'ioredis';
-import { REDIS_CONNECTION } from '$env/static/private';
+import { Client } from '@upstash/qstash';
+import { REDIS_CONNECTION, QSTASH_TOKEN, CALLBACK_URL } from '$env/static/private';
 import type * as TMDB from '$lib/types/tmdb';
 import type { MovieDetails } from '$lib/types';
+
+const redis = REDIS_CONNECTION ? new Redis(REDIS_CONNECTION) : new Redis();
+const qstash = new Client({
+	token: QSTASH_TOKEN
+});
 
 const MOVIE_IDS_KEY = 'movie_ids';
 
@@ -13,8 +19,6 @@ function getMovieKey(id: number) {
 function getExpiryKey(id: number) {
 	return getMovieKey(id) + ':fresh';
 }
-
-const redis = REDIS_CONNECTION ? new Redis(REDIS_CONNECTION) : new Redis();
 
 async function hasMovieCacheExpired(id: number) {
 	const key = getExpiryKey(id);
@@ -33,9 +37,12 @@ export async function getMovieDetailsFromCache(
 	try {
 		const cached = await redis.get(getMovieKey(id));
 		if (cached) {
-			const hasExpired = await hasMovieCacheExpired(id);
+			if (await hasMovieCacheExpired(id)) {
+				console.log('Cache expired, sending update request');
+				sendUpdateRequest(id);
+			}
 			const parsed: MovieDetails = JSON.parse(cached);
-			console.log(`Found ${id} in cache`, hasExpired);
+			console.log(`Found ${id} in cache`);
 			return parsed;
 		}
 	} catch (e) {
@@ -82,5 +89,20 @@ export async function cacheMovieIds(ids: number[]) {
 		} catch (e) {
 			console.log(e);
 		}
+	}
+}
+
+async function sendUpdateRequest(id: number) {
+	try {
+		const res = await qstash.publishJSON({
+			url: `${CALLBACK_URL}/api/refresh`,
+			body: {
+				id
+			}
+		});
+
+		console.log('QStash response:', res);
+	} catch (e) {
+		console.log('Unable to call QStash', e);
 	}
 }
