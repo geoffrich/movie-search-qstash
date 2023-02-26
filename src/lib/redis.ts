@@ -35,11 +35,14 @@ export async function getMovieDetailsFromCache(
 	id: number
 ): Promise<MovieDetails | Record<string, never>> {
 	try {
-		const cached = await redis.get(getMovieKey(id));
+		const [cached, didCacheExpire] = await Promise.all([
+			redis.get(getMovieKey(id)),
+			hasMovieCacheExpired(id)
+		]);
 		if (cached) {
-			if (await hasMovieCacheExpired(id)) {
+			if (didCacheExpire) {
 				console.log('Cache expired, sending update request');
-				sendUpdateRequest(id);
+				await sendUpdateRequest(id);
 			}
 			const parsed: MovieDetails = JSON.parse(cached);
 			console.log(`Found ${id} in cache`);

@@ -12,7 +12,6 @@ const receiver = new Receiver({
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.text();
 	const isValid = await receiver.verify({
-		// TODO: might need to be lower case in PROD
 		signature: request.headers.get('Upstash-Signature') ?? '',
 		body
 	});
