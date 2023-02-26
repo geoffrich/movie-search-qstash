@@ -72,8 +72,8 @@ export async function cacheMovieResponse(
 			// store movie response
 			.set(movieKey, JSON.stringify(cache))
 			// this will track whether the data needs to be refreshed
-			// TODO: update to 24 * 60 * 60
-			.set(expiryKey, 'true', 'EX', 20);
+			// set the last argument to a smaller value for easier testing
+			.set(expiryKey, 'true', 'EX', 24 * 60 * 60);
 
 		await pipeline.exec();
 	} catch (e) {
