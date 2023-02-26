@@ -15,11 +15,13 @@ export async function searchMovies(searchQuery: string, page: number) {
 
 	// filter out obscure movies
 	const filteredMovies = parsed.results.filter((movie) => movie.vote_count >= VOTE_THRESHOLD);
-	const removedMovies = parsed.results.filter((movie) => movie.vote_count < 20);
+	const removedMovies = parsed.results.filter((movie) => movie.vote_count < VOTE_THRESHOLD);
 	console.log(
 		'Filtered out:',
 		removedMovies.map((m) => m.title)
 	);
+
+	parsed.results = filteredMovies;
 
 	await cacheMovieIds(filteredMovies.map((m) => m.id));
 
