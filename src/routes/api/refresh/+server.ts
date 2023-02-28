@@ -1,7 +1,6 @@
 import type { RequestHandler } from './$types';
 import { Receiver } from '@upstash/qstash';
 import { QSTASH_CURRENT_SIGNING_KEY, QSTASH_NEXT_SIGNING_KEY } from '$env/static/private';
-import {} from '$lib/redis';
 import { getMovieDetailsFromApi } from '$lib/api';
 
 const receiver = new Receiver({

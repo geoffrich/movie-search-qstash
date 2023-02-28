@@ -1,8 +1,8 @@
 import Redis from 'ioredis';
 import { Client } from '@upstash/qstash';
-import { REDIS_CONNECTION, QSTASH_TOKEN, CALLBACK_URL } from '$env/static/private';
 import type * as TMDB from '$lib/types/tmdb';
 import type { MovieDetails } from '$lib/types';
+import { REDIS_CONNECTION, QSTASH_TOKEN, CALLBACK_URL } from '$env/static/private';
 
 const redis = REDIS_CONNECTION ? new Redis(REDIS_CONNECTION) : new Redis();
 const qstash = new Client({
@@ -20,27 +20,14 @@ function getExpiryKey(id: number) {
 	return getMovieKey(id) + ':fresh';
 }
 
-async function hasMovieCacheExpired(id: number) {
-	const key = getExpiryKey(id);
-	try {
-		const result = await redis.get(key);
-		return result === null;
-	} catch (e) {
-		console.log('Unable to retrieve', key, e);
-	}
-	return false;
-}
-
 export async function getMovieDetailsFromCache(
 	id: number
 ): Promise<MovieDetails | Record<string, never>> {
 	try {
-		const [cached, didCacheExpire] = await Promise.all([
-			redis.get(getMovieKey(id)),
-			hasMovieCacheExpired(id)
-		]);
+		const [cached, expiryKey] = await redis.mget(getMovieKey(id), getExpiryKey(id));
+
 		if (cached) {
-			if (didCacheExpire) {
+			if (expiryKey === null) {
 				console.log('Cache expired, sending update request');
 				await sendUpdateRequest(id);
 			}
@@ -53,6 +40,8 @@ export async function getMovieDetailsFromCache(
 	}
 	return {};
 }
+
+const DEFAULT_EXPIRY = 24 * 60 * 60;
 
 export async function cacheMovieResponse(
 	id: number,
@@ -67,15 +56,14 @@ export async function cacheMovieResponse(
 		};
 		const movieKey = getMovieKey(id);
 		const expiryKey = getExpiryKey(id);
-		const pipeline = redis
+		await redis
 			.multi()
 			// store movie response
 			.set(movieKey, JSON.stringify(cache))
 			// this will track whether the data needs to be refreshed
 			// set the last argument to a smaller value for easier testing
-			.set(expiryKey, 'true', 'EX', 24 * 60 * 60);
-
-		await pipeline.exec();
+			.set(expiryKey, 'true', 'EX', DEFAULT_EXPIRY)
+			.exec();
 	} catch (e) {
 		console.log('Unable to cache', id, e);
 	}
@@ -98,7 +86,7 @@ export async function cacheMovieIds(ids: number[]) {
 async function sendUpdateRequest(id: number) {
 	try {
 		const res = await qstash.publishJSON({
-			url: `${CALLBACK_URL}/api/refresh`,
+			url: new URL('/api/refresh', CALLBACK_URL).toString(),
 			body: {
 				id
 			}

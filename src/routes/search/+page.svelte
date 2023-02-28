@@ -33,7 +33,7 @@
 <h1>Search Results</h1>
 
 <Search {query} />
-<p>{data.searchResponse.total_results} results (page {currentPage} of {totalPages})</p>
+<p>{data.searchResponse.results.length} results (page {currentPage} of {totalPages})</p>
 <ul>
 	{#each movies as movie (movie.id)}
 		<li>
